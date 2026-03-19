@@ -1,186 +1,156 @@
-// ============================================================
-//  DAZU Server — server.js
-//  Ejecutar: node server.js
-// ============================================================
+// DAZU Messenger Server v2.0
+// node server.js  |  PORT=3000
 
-const http = require('http');
+const http   = require('http');
 const crypto = require('crypto');
-const fs = require('fs');
-const fspath = require('path');
+const PORT   = process.env.PORT || 3000;
+const MAX_BODY = 10 * 1024 * 1024; // 10MB to support base64 images
 
-const PORT = 3000;
-
-// ── Almacenamiento en memoria ─────────────────────────────
-const inbox = {};   // inbox[userId] = [mensajes]
+const inbox  = {};  // inbox[userId] = [msgs]
 const online = {};  // online[userId] = { nodeIp, lastSeen }
 
-function ensureInbox(userId) {
-  if (!inbox[userId]) inbox[userId] = [];
-}
+function log(m) { console.log(`[${new Date().toISOString().slice(11,19)}] ${m}`); }
 
-function log(msg) {
-  const t = new Date().toISOString().slice(11, 19);
-  console.log(`[${t}] ${msg}`);
-}
-
-// ── Helpers ───────────────────────────────────────────────
-function readBody(req) {
-  return new Promise((res) => {
-    let data = '';
-    req.on('data', chunk => data += chunk);
-    req.on('end', () => {
-      try { res(JSON.parse(data || '{}')); }
-      catch { res({}); }
-    });
-  });
+function cors(res) {
+  res.setHeader('Access-Control-Allow-Origin',  '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
 }
 
 function json(res, status, obj) {
-  const body = JSON.stringify(obj);
-  res.writeHead(status, {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+  cors(res);
+  res.writeHead(status, {'Content-Type':'application/json'});
+  res.end(JSON.stringify(obj));
+}
+
+function readBody(req) {
+  return new Promise((resolve) => {
+    const chunks = [];
+    let size = 0;
+    req.on('data', chunk => {
+      size += chunk.length;
+      if (size > MAX_BODY) { resolve({}); return; }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      try { resolve(JSON.parse(Buffer.concat(chunks).toString() || '{}')); }
+      catch { resolve({}); }
+    });
   });
-  res.end(body);
 }
 
 function getParams(url) {
-  const u = new URL(url, 'http://localhost');
   const p = {};
-  u.searchParams.forEach((v, k) => p[k] = v);
+  new URL(url, 'http://x').searchParams.forEach((v,k) => p[k]=v);
   return p;
 }
 
-// ── Servidor ──────────────────────────────────────────────
+function ensureInbox(uid) { if (!inbox[uid]) inbox[uid] = []; }
+
+// Mark users offline if not pinged in 60s
+setInterval(() => {
+  const now = Date.now();
+  for (const uid in online) {
+    if (now - online[uid].lastSeen > 60000) delete online[uid];
+  }
+}, 15000);
+
 const server = http.createServer(async (req, res) => {
   const path = req.url.split('?')[0];
 
-  // CORS preflight
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    });
-    res.end();
-    return;
+  if (req.method === 'OPTIONS') { cors(res); res.writeHead(204); res.end(); return; }
+
+  // ── GET /health
+  if (req.method === 'GET' && path === '/health') {
+    return json(res, 200, { ok: true, users: Object.keys(online).length,
+      msgs: Object.values(inbox).reduce((a,b) => a + b.length, 0) });
   }
 
-  // GET / — sirve el sitio web
-  if (req.method === 'GET' && (path === '/' || path === '/index.html')) {
-    const htmlPath = fspath.join(__dirname, 'index.html');
-    if (fs.existsSync(htmlPath)) {
-      const html = fs.readFileSync(htmlPath, 'utf8');
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(html);
-    } else {
-      json(res, 404, { error: 'index.html not found' });
-    }
-    return;
-  }
-
-  // GET /info
-  if (req.method === 'GET' && path === '/info') {
-    json(res, 200, {
-      server: 'DAZU',
-      version: '1.0.0',
-      users: Object.keys(online).length,
-      uptime: Math.floor(process.uptime()),
-    });
-    return;
-  }
-
-  // POST /register — app o ESP32 avisa que está online
+  // ── POST /register
   if (req.method === 'POST' && path === '/register') {
-    const body = await readBody(req);
-    const { userId, nodeIp } = body;
-    if (!userId) return json(res, 400, { error: 'userId requerido' });
-    online[userId] = { nodeIp: nodeIp || null, lastSeen: Date.now() };
-    ensureInbox(userId);
-    log(`REGISTER ${userId} nodeIp=${nodeIp || 'app'}`);
-    json(res, 200, { status: 'ok' });
-    return;
+    const b = await readBody(req);
+    const uid = b.userId || b.from || '';
+    if (!uid) return json(res, 400, { error: 'userId required' });
+    online[uid] = { nodeIp: b.nodeIp || '', lastSeen: Date.now(), name: b.name || uid };
+    log(`ONLINE ${uid}`);
+    return json(res, 200, { ok: true });
   }
 
-  // POST /send — enviar mensaje
+  // ── POST /send
   if (req.method === 'POST' && path === '/send') {
-    const body = await readBody(req);
-    const from    = body.from    || body.sender   || '';
-    const to      = body.to      || body.receiver || '';
-    const content = body.content || body.body     || '';
-
+    const b = await readBody(req);
+    const from    = b.from    || b.sender   || '';
+    const to      = b.to      || b.receiver || '';
+    const content = b.content || b.body     || '';
+    const type    = b.type    || 'text';
     if (!from || !to) return json(res, 400, { error: 'from y to requeridos' });
 
+    // Handle delivery/read receipts — route back to sender
+    if (type === 'delivered' || type === 'read') {
+      ensureInbox(to);
+      inbox[to].push({ id: b.id || crypto.randomUUID(), from, to,
+        body: content, type, timestamp: b.timestamp || new Date().toISOString() });
+      return json(res, 200, { ok: true });
+    }
+
     const msg = {
-      id:        body.id || crypto.randomUUID(),
-      from,
-      to,
-      body:      content,
-      type:      body.type || 'text',
-      timestamp: body.timestamp || new Date().toISOString(),
+      id:         b.id || crypto.randomUUID(),
+      from,  to,
+      body:       content,
+      content:    content,
+      type,
+      timestamp:  b.timestamp || new Date().toISOString(),
+      reactionTo: b.reactionTo || null,
     };
 
     ensureInbox(to);
     inbox[to].push(msg);
+    if (inbox[to].length > 300) inbox[to].shift();
 
-    // Máximo 200 mensajes por usuario
-    if (inbox[to].length > 200) inbox[to].shift();
+    // Update sender's last seen
+    if (online[from]) online[from].lastSeen = Date.now();
+    else online[from] = { lastSeen: Date.now(), nodeIp: '' };
 
-    log(`MSG ${from} → ${to}: "${content.slice(0, 40)}"`);
-    json(res, 200, { status: 'ok', id: msg.id });
-    return;
+    const preview = content.startsWith('data:') ? '[media]' : content.slice(0,40);
+    log(`MSG ${from}→${to} [${type}]: ${preview}`);
+    return json(res, 200, { ok: true, id: msg.id });
   }
 
-  // GET /inbox?userId=XXX — recoger mensajes pendientes
+  // ── GET /inbox?userId=XXX
   if (req.method === 'GET' && path === '/inbox') {
     const { userId } = getParams(req.url);
-    if (!userId) return json(res, 400, { error: 'userId requerido' });
+    if (!userId) return json(res, 400, { error: 'userId required' });
 
-    ensureInbox(userId);
+    // Update last seen
+    online[userId] = { ...(online[userId] || {}), lastSeen: Date.now() };
 
-    // Actualizar lastSeen
-    if (!online[userId]) online[userId] = {};
-    online[userId].lastSeen = Date.now();
+    const messages = inbox[userId] || [];
+    inbox[userId] = []; // clear after delivery
 
-    const messages = [...inbox[userId]];
-    inbox[userId] = []; // limpiar después de entregar
+    // Build online users list (active in last 60s)
+    const onlineList = Object.keys(online)
+      .filter(uid => uid !== userId && Date.now() - online[uid].lastSeen < 60000);
 
-    if (messages.length > 0) log(`INBOX ${userId} → ${messages.length} mensajes`);
-
-    json(res, 200, { messages, acks: [] });
-    return;
+    if (messages.length > 0) log(`INBOX ${userId} → ${messages.length} msgs`);
+    return json(res, 200, { messages, online: onlineList });
   }
 
-  // POST /ack — confirmar entrega
-  if (req.method === 'POST' && path === '/ack') {
-    json(res, 200, { status: 'ok' });
-    return;
-  }
-
-  // GET /online — ver quién está conectado
+  // ── GET /online — who is online
   if (req.method === 'GET' && path === '/online') {
-    const now = Date.now();
-    const active = Object.entries(online)
-      .filter(([, v]) => now - v.lastSeen < 30000) // activo en últimos 30s
-      .map(([userId, v]) => ({ userId, nodeIp: v.nodeIp }));
-    json(res, 200, { users: active });
-    return;
+    const onlineList = Object.entries(online)
+      .filter(([_, v]) => Date.now() - v.lastSeen < 60000)
+      .map(([uid, v]) => ({ userId: uid, lastSeen: v.lastSeen }));
+    return json(res, 200, { online: onlineList });
   }
 
-  // 404
-  json(res, 404, { error: 'Not found' });
+  json(res, 404, { error: 'not found' });
 });
 
 server.listen(PORT, () => {
-  log(`DAZU Server corriendo en http://localhost:${PORT}`);
-  log(`Endpoints:`);
-  log(`  GET  /info`);
+  log(`DAZU Server v2.0 on port ${PORT}`);
   log(`  POST /register  { userId, nodeIp? }`);
-  log(`  POST /send      { from, to, content, type? }`);
+  log(`  POST /send      { from, to, content/body, type?, reactionTo? }`);
   log(`  GET  /inbox?userId=XXX`);
-  log(`  POST /ack`);
   log(`  GET  /online`);
-  log(`\nEjecuta en otra terminal:`);
-  log(`  ngrok http ${PORT}`);
+  log(`  GET  /health`);
 });
