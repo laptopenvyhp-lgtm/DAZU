@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DAZU — Mensajería sin internet</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;600;700;900&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#030508;
+  --card:rgba(255,255,255,0.03);
+  --border:rgba(0,210,255,0.12);
+  --blue:#00d2ff;
+  --purple:#a855f7;
+  --pink:#f472b6;
+  --green:#22d3a5;
+  --text:#eef2ff;
+  --muted:#64748b;
+  --glow-blue:rgba(0,210,255,0.3);
+  --glow-purple:rgba(168,85,247,0.3);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:'Outfit',sans-serif;font-weight:300;
+  overflow-x:hidden;cursor:none;
+}
+
+/* ─── CUSTOM CURSOR ─── */
+.cursor{
+  position:fixed;width:12px;height:12px;border-radius:50%;
+  background:var(--blue);pointer-events:none;z-index:9999;
+  transform:translate(-50%,-50%);
+  box-shadow:0 0 20px var(--blue),0 0 40px var(--blue);
+  transition:transform 0.1s,width 0.2s,height 0.2s;
+}
+.cursor-ring{
+  position:fixed;width:40px;height:40px;border-radius:50%;
+  border:1px solid rgba(0,210,255,0.5);pointer-events:none;z-index:9998;
+  transform:translate(-50%,-50%);
+  transition:transform 0.15s ease,width 0.3s,height 0.3s,border-color 0.3s;
+}
+a:hover~.cursor,.btn-dl:hover~.cursor{transform:translate(-50%,-50%) scale(2);}
+
+/* ─── CANVAS BG ─── */
+#bgCanvas{position:fixed;inset:0;z-index:0;opacity:0.6;}
+
+/* ─── NAV ─── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 48px;
+  background:rgba(3,5,8,0.7);
+  backdrop-filter:blur(24px);
+  border-bottom:1px solid var(--border);
+}
+.nav-brand{
+  font-family:'Outfit',sans-serif;font-weight:900;
+  font-size:24px;letter-spacing:6px;
+  background:linear-gradient(90deg,var(--blue),var(--purple));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.nav-links{display:flex;gap:32px;list-style:none;align-items:center;}
+.nav-links a{
+  color:var(--muted);text-decoration:none;font-size:13px;
+  letter-spacing:0.5px;transition:color 0.2s;
+}
+.nav-links a:hover{color:var(--text);}
+.nav-about-btn{
+  background:none;border:1px solid var(--border);
+  color:var(--muted);font-size:12px;letter-spacing:1px;
+  text-transform:uppercase;padding:8px 20px;border-radius:100px;
+  cursor:pointer;font-family:'Outfit',sans-serif;transition:all 0.2s;
+}
+.nav-about-btn:hover{color:var(--text);border-color:rgba(0,210,255,0.3);}
+
+/* ─── HERO ─── */
+.hero{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  position:relative;padding:120px 24px 80px;text-align:center;
+  z-index:1;
+}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(0,210,255,0.08);border:1px solid rgba(0,210,255,0.25);
+  border-radius:100px;padding:6px 18px;margin-bottom:32px;
+  font-size:11px;letter-spacing:2.5px;text-transform:uppercase;color:var(--blue);
+  animation:fadeDown 0.8s ease both;
+}
+.badge-dot{
+  width:6px;height:6px;border-radius:50%;background:var(--blue);
+  animation:pulse 1.5s infinite;
+}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.3;transform:scale(0.8)}}
+@keyframes fadeDown{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+.hero-title{
+  font-weight:900;font-size:clamp(56px,12vw,130px);
+  line-height:0.9;letter-spacing:-4px;margin-bottom:16px;
+  animation:fadeUp 0.9s 0.1s ease both;
+}
+.hero-title .t1{
+  background:linear-gradient(135deg,#fff 0%,rgba(255,255,255,0.6) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  display:block;
+}
+.hero-title .t2{
+  background:linear-gradient(135deg,var(--blue) 0%,var(--purple) 50%,var(--pink) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  display:block;font-size:0.5em;letter-spacing:2px;font-weight:300;
+  margin-top:8px;
+}
+.hero-sub{
+  font-size:clamp(14px,2vw,18px);color:var(--muted);line-height:1.8;
+  max-width:520px;margin:0 auto 20px;
+  animation:fadeUp 0.9s 0.2s ease both;
+}
+.hero-beta{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);
+  border-radius:8px;padding:8px 16px;margin-bottom:40px;
+  font-size:12px;color:#fbbf24;letter-spacing:0.5px;
+  animation:fadeUp 0.9s 0.25s ease both;
+}
+
+/* ─── FLOATING DOWNLOAD BUTTON ─── */
+.dl-wrap{
+  position:relative;display:inline-block;
+  animation:fadeUp 0.9s 0.3s ease both;
+}
+
+.dl-btn{
+  position:relative;display:inline-flex;align-items:center;gap:14px;
+  background:linear-gradient(135deg,var(--blue),var(--purple));
+  color:#000;text-decoration:none;
+  font-family:'Outfit',sans-serif;font-weight:700;
+  font-size:18px;padding:22px 52px;border-radius:100px;
+  box-shadow:0 0 40px var(--glow-blue),0 0 80px rgba(168,85,247,0.2),0 20px 60px rgba(0,0,0,0.5);
+  transition:all 0.4s cubic-bezier(0.175,0.885,0.32,1.275);
+  animation:floatBtn 3s ease-in-out infinite;
+  cursor:pointer;border:none;overflow:hidden;
+  letter-spacing:0.5px;
+}
+@keyframes floatBtn{
+  0%,100%{transform:translateY(0) scale(1);box-shadow:0 0 40px var(--glow-blue),0 0 80px rgba(168,85,247,0.2),0 20px 60px rgba(0,0,0,0.5);}
+  50%{transform:translateY(-8px) scale(1.02);box-shadow:0 0 60px var(--glow-blue),0 0 120px rgba(168,85,247,0.3),0 30px 80px rgba(0,0,0,0.4);}
+}
+.dl-btn::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(255,255,255,0.25),transparent);
+  opacity:0;transition:opacity 0.3s;
+}
+.dl-btn:hover{
+  animation:none;
+  transform:scale(1.06) translateY(-4px);
+  box-shadow:0 0 80px var(--glow-blue),0 0 160px rgba(168,85,247,0.4),0 30px 80px rgba(0,0,0,0.4);
+}
+.dl-btn:hover::before{opacity:1;}
+.dl-btn.downloading{
+  animation:none;
+  background:linear-gradient(135deg,var(--green),#059669);
+  box-shadow:0 0 60px rgba(34,211,165,0.5),0 20px 60px rgba(0,0,0,0.4);
+  transform:scale(1.08);
+}
+.dl-btn.downloaded{
+  animation:none;
+  background:linear-gradient(135deg,#22d3a5,#3b82f6);
+  transform:scale(1.05);
+}
+.dl-btn svg{width:24px;height:24px;flex-shrink:0;transition:transform 0.3s;}
+.dl-btn:hover svg{transform:translateY(3px);}
+.dl-btn-sub{font-size:11px;font-weight:400;opacity:0.7;display:block;margin-top:1px;}
+/* Ripple */
+.dl-btn .ripple{
+  position:absolute;border-radius:50%;
+  background:rgba(255,255,255,0.3);
+  transform:scale(0);animation:ripple 0.6s linear;
+  pointer-events:none;
+}
+@keyframes ripple{to{transform:scale(4);opacity:0;}}
+
+/* Thank you overlay */
+.thankyou{
+  position:fixed;inset:0;z-index:9000;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:rgba(3,5,8,0.95);backdrop-filter:blur(20px);
+  opacity:0;pointer-events:none;
+  transition:opacity 0.5s ease;
+}
+.thankyou.show{opacity:1;pointer-events:all;}
+.ty-icon{font-size:80px;margin-bottom:24px;animation:bounceIn 0.6s ease;}
+@keyframes bounceIn{
+  0%{transform:scale(0)}60%{transform:scale(1.2)}100%{transform:scale(1)}
+}
+.ty-title{
+  font-size:clamp(32px,6vw,56px);font-weight:900;letter-spacing:-2px;
+  background:linear-gradient(135deg,var(--blue),var(--purple),var(--pink));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  margin-bottom:12px;
+}
+.ty-sub{font-size:16px;color:var(--muted);max-width:400px;text-align:center;line-height:1.7;}
+.ty-close{
+  margin-top:36px;padding:12px 32px;border-radius:100px;
+  background:rgba(255,255,255,0.06);border:1px solid var(--border);
+  color:var(--text);font-size:14px;cursor:pointer;
+  font-family:'Outfit',sans-serif;
+  transition:all 0.2s;
+}
+.ty-close:hover{background:rgba(255,255,255,0.12);}
+
+/* Rings around DL btn */
+.dl-rings{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:300px;height:300px;pointer-events:none;z-index:-1;
+}
+.dl-ring{
+  position:absolute;inset:0;border-radius:50%;
+  border:1px solid rgba(0,210,255,0.15);
+  animation:expandRing 2.5s ease-out infinite;
+}
+.dl-ring:nth-child(2){animation-delay:0.8s;}
+.dl-ring:nth-child(3){animation-delay:1.6s;}
+@keyframes expandRing{
+  0%{transform:scale(0.4);opacity:0;}
+  40%{opacity:1;}
+  100%{transform:scale(1.5);opacity:0;}
+}
+
+/* install steps */
+.install-steps{
+  margin-top:24px;display:flex;gap:16px;flex-wrap:wrap;justify-content:center;
+  animation:fadeUp 0.9s 0.4s ease both;
+}
+.step{
+  display:flex;align-items:center;gap:8px;
+  background:rgba(255,255,255,0.04);border:1px solid var(--border);
+  border-radius:100px;padding:8px 16px;font-size:12px;color:var(--muted);
+}
+.step-num{
+  width:20px;height:20px;border-radius:50%;
+  background:linear-gradient(135deg,var(--blue),var(--purple));
+  color:#000;font-size:10px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+
+/* ─── FEATURES ─── */
+.section{padding:100px 24px;position:relative;z-index:1;}
+.section-inner{max-width:1100px;margin:0 auto;}
+.section-tag{
+  display:inline-block;font-size:11px;letter-spacing:3px;
+  text-transform:uppercase;color:var(--blue);margin-bottom:14px;
+  font-family:'JetBrains Mono',monospace;
+}
+.section-title{
+  font-weight:900;font-size:clamp(28px,5vw,52px);
+  line-height:1.1;letter-spacing:-1.5px;margin-bottom:14px;
+}
+.section-desc{font-size:15px;color:var(--muted);line-height:1.8;max-width:480px;}
+
+.feat-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);
+  gap:1px;margin-top:60px;
+  background:var(--border);
+  border:1px solid var(--border);border-radius:16px;overflow:hidden;
+}
+.feat-card{
+  background:var(--bg);padding:32px 28px;
+  transition:all 0.3s;position:relative;overflow:hidden;
+}
+.feat-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--blue),transparent);
+  opacity:0;transition:opacity 0.3s;
+}
+.feat-card:hover{background:rgba(0,210,255,0.04);}
+.feat-card:hover::before{opacity:1;}
+.feat-icon{font-size:28px;margin-bottom:14px;display:block;}
+.feat-card h3{font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px;}
+.feat-card p{font-size:13px;color:var(--muted);line-height:1.65;}
+
+/* ─── HOW ─── */
+.how{
+  padding:100px 24px;
+  background:linear-gradient(180deg,transparent,rgba(0,210,255,0.03),transparent);
+  border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+  position:relative;z-index:1;
+}
+.how-inner{max-width:900px;margin:0 auto;text-align:center;}
+.steps-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);
+  gap:1px;margin-top:60px;
+  background:var(--border);border:1px solid var(--border);border-radius:16px;overflow:hidden;
+}
+.step-card{
+  background:var(--bg);padding:40px 28px;
+  position:relative;transition:all 0.3s;
+}
+.step-card:hover{background:rgba(168,85,247,0.04);}
+.step-n{
+  font-family:'JetBrains Mono',monospace;
+  font-size:56px;font-weight:600;
+  color:rgba(0,210,255,0.08);
+  position:absolute;top:12px;right:16px;line-height:1;
+}
+.step-icon{font-size:36px;margin-bottom:16px;}
+.step-card h3{font-size:17px;font-weight:700;margin-bottom:8px;}
+.step-card p{font-size:13px;color:var(--muted);line-height:1.7;}
+
+
+
+
+
+/* ─── ABOUT MODAL ─── */
+.modal-overlay{
+  position:fixed;inset:0;z-index:999;
+  background:rgba(3,5,8,0.92);backdrop-filter:blur(16px);
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;padding:20px;
+  transition:opacity 0.3s ease;
+}
+.modal-overlay.open{opacity:1;pointer-events:all;}
+.modal-box{
+  background:#0a0d14;border:1px solid rgba(0,210,255,0.2);
+  border-radius:20px;width:100%;max-width:660px;
+  max-height:88vh;overflow-y:auto;
+  transform:translateY(24px);transition:transform 0.3s ease;
+}
+.modal-overlay.open .modal-box{transform:translateY(0);}
+.modal-head{
+  padding:28px 32px 0;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;background:#0a0d14;padding-bottom:20px;
+  border-bottom:1px solid var(--border);
+}
+.modal-head h2{
+  font-weight:900;font-size:22px;letter-spacing:4px;
+  background:linear-gradient(135deg,var(--blue),var(--purple));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.modal-close{
+  background:rgba(255,255,255,0.06);border:1px solid var(--border);
+  color:var(--muted);width:34px;height:34px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;font-size:16px;transition:all 0.2s;
+}
+.modal-close:hover{color:var(--text);background:rgba(255,255,255,0.12);}
+.modal-body{padding:24px 32px 32px;}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px;}
+.info-chip{
+  padding:14px 18px;background:rgba(255,255,255,0.02);
+  border:1px solid var(--border);border-radius:10px;
+}
+.info-chip-lbl{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:5px;}
+.info-chip-val{font-size:14px;font-weight:500;color:var(--text);}
+.info-desc{
+  font-size:13px;color:var(--muted);line-height:1.8;
+  padding:18px;background:rgba(0,210,255,0.04);
+  border:1px solid rgba(0,210,255,0.1);border-radius:10px;margin-bottom:20px;
+}
+.team-label{
+  font-size:11px;letter-spacing:2px;text-transform:uppercase;
+  color:var(--blue);margin-bottom:12px;
+  font-family:'JetBrains Mono',monospace;
+}
+.team-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.team-card{
+  display:flex;align-items:center;gap:12px;
+  padding:16px;background:rgba(255,255,255,0.02);
+  border:1px solid var(--border);border-radius:10px;
+  text-decoration:none;transition:all 0.2s;
+}
+.team-card:hover{border-color:rgba(0,210,255,0.3);background:rgba(0,210,255,0.04);}
+.team-ava{
+  width:42px;height:42px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:18px;color:#000;
+}
+.team-name{font-size:14px;font-weight:600;color:var(--text);}
+.team-role{font-size:11px;color:var(--muted);margin-top:1px;}
+.team-ig{font-size:11px;color:var(--blue);margin-top:3px;}
+
+/* ─── MARQUEE ─── */
+.marquee-wrap{
+  padding:18px 0;
+  background:rgba(0,210,255,0.04);
+  border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+  overflow:hidden;white-space:nowrap;
+  position:relative;z-index:1;
+}
+.marquee-track{
+  display:inline-block;
+  animation:marquee 30s linear infinite;
+}
+.marquee-track:hover{animation-play-state:paused;}
+@keyframes marquee{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.marquee-item{
+  display:inline-block;padding:0 40px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:12px;color:var(--muted);letter-spacing:1px;
+}
+.marquee-item span{color:var(--blue);margin-right:8px;}
+
+/* ─── FOOTER ─── */
+footer{
+  padding:56px 48px 32px;
+  border-top:1px solid var(--border);
+  position:relative;z-index:1;
+}
+.footer-inner{
+  max-width:1100px;margin:0 auto;
+}
+.footer-top{
+  display:flex;justify-content:space-between;align-items:flex-start;
+  flex-wrap:wrap;gap:32px;margin-bottom:40px;
+}
+.footer-brand-col{}
+.footer-brand{
+  font-weight:900;font-size:28px;letter-spacing:6px;
+  background:linear-gradient(135deg,var(--blue),var(--purple));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  display:block;margin-bottom:8px;
+}
+.footer-tagline{font-size:13px;color:var(--muted);line-height:1.6;max-width:220px;}
+.footer-creators{display:flex;flex-direction:column;gap:10px;align-items:flex-end;}
+.footer-creator-link{
+  display:flex;align-items:center;gap:8px;
+  color:var(--muted);text-decoration:none;font-size:13px;
+  transition:color 0.2s;
+}
+.footer-creator-link:hover{color:var(--blue);}
+.footer-creator-link svg{opacity:0.5;}
+.footer-divider{height:1px;background:var(--border);margin-bottom:20px;}
+.footer-bottom{
+  display:flex;justify-content:space-between;align-items:center;
+  flex-wrap:wrap;gap:12px;
+}
+.footer-copy{font-size:11px;color:rgba(100,116,139,0.6);letter-spacing:0.5px;}
+.footer-beta{
+  font-size:11px;color:#fbbf24;
+  background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.15);
+  padding:4px 12px;border-radius:100px;
+}
+
+
+/* ─── MINI PILL (scroll indicator) ─── */
+.dl-mini-pill{
+  position:fixed;
+  top:74px;        /* just below the nav bar */
+  right:20px;
+  z-index:200;     /* below modals/cursor but above content */
+  opacity:0;
+  pointer-events:none;
+  transform:translateY(-8px) scale(0.85);
+  transition:opacity 0.35s ease, transform 0.35s cubic-bezier(0.34,1.56,0.64,1);
+}
+.dl-mini-pill.show{
+  opacity:1;
+  pointer-events:all;
+  transform:translateY(0) scale(1);
+}
+.dl-mini-pill a{
+  display:inline-flex;align-items:center;gap:7px;
+  background:linear-gradient(135deg,var(--blue),var(--purple));
+  color:#000;text-decoration:none;
+  font-family:'Outfit',sans-serif;font-weight:700;
+  font-size:12px;letter-spacing:0.3px;
+  padding:8px 16px;border-radius:100px;
+  white-space:nowrap;
+  box-shadow:0 0 18px var(--glow-blue),0 4px 20px rgba(0,0,0,0.4);
+  transition:box-shadow 0.3s, transform 0.2s;
+}
+.dl-mini-pill a:hover{
+  box-shadow:0 0 30px var(--glow-blue),0 8px 30px rgba(0,0,0,0.3);
+  transform:scale(1.04);
+}
+.dl-mini-pill svg{width:13px;height:13px;flex-shrink:0;}
+@media(max-width:768px){
+  .dl-mini-pill{top:66px;right:12px;}
+}
+
+/* ─── REVEAL ─── */
+.reveal{opacity:0;transform:translateY(28px);transition:opacity 0.7s ease,transform 0.7s ease;}
+.reveal.visible{opacity:1;transform:none;}
+
+/* ─── RESPONSIVE ─── */
+@media(max-width:768px){
+  nav{padding:14px 20px;}
+  .nav-links{display:none;}
+  .nav-dl{display:block;}
+  .section,.how{padding:72px 20px;}
+  .feat-grid,.steps-grid{grid-template-columns:1fr;}
+  .stats{grid-template-columns:repeat(2,1fr);}
+  .info-grid,.team-grid{grid-template-columns:1fr;}
+  footer{padding:40px 20px 24px;}
+  .footer-top{flex-direction:column;}
+  .footer-creators{align-items:flex-start;}
+}
+</style>
+</head>
+<body>
+
+<div class="cursor" id="cur"></div>
+<div class="cursor-ring" id="curRing"></div>
+<canvas id="bgCanvas"></canvas>
+
+<!-- THANK YOU OVERLAY -->
+<div class="thankyou" id="tyOverlay">
+  <div class="ty-icon">🚀</div>
+  <div class="ty-title">¡Gracias por descargar!</div>
+  <p class="ty-sub">DAZU está en camino a tu dispositivo. Recuerda activar "Fuentes desconocidas" para instalar el APK.</p>
+  <button class="ty-close" onclick="document.getElementById('tyOverlay').classList.remove('show')">Cerrar</button>
+</div>
+
+<!-- MODAL ACERCA DE -->
+<div class="modal-overlay" id="aboutModal" onclick="handleOverlay(event)">
+  <div class="modal-box" id="modalBox">
+    <div class="modal-head">
+      <h2>DAZU</h2>
+      <button class="modal-close" onclick="closeAbout()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="info-grid">
+        <div class="info-chip"><div class="info-chip-lbl">Plataforma</div><div class="info-chip-val">Android</div></div>
+        <div class="info-chip"><div class="info-chip-lbl">Hardware</div><div class="info-chip-val">ESP32 + ESP-NOW</div></div>
+        <div class="info-chip"><div class="info-chip-lbl">Protocolo</div><div class="info-chip-val">Mesh / HTTP Híbrido</div></div>
+        <div class="info-chip"><div class="info-chip-lbl">Framework</div><div class="info-chip-val">Flutter (Dart)</div></div>
+        <div class="info-chip"><div class="info-chip-lbl">Firmware</div><div class="info-chip-val">Arduino C++</div></div>
+        <div class="info-chip"><div class="info-chip-lbl">Servidor</div><div class="info-chip-val">Node.js · Render</div></div>
+      </div>
+      <div class="info-desc">
+        DAZU es una app de mensajería que funciona <strong style="color:var(--text)">sin internet</strong>. Usa nodos ESP32 que se comunican mediante <strong style="color:var(--text)">ESP-NOW</strong> formando una red mesh local. Tu teléfono se conecta al nodo más cercano por WiFi y los mensajes saltan de nodo en nodo. Cuando hay internet activa el modo servidor para mayor alcance.
+      </div>
+      <div class="team-label">Equipo</div>
+      <div class="team-grid">
+        <a href="https://www.instagram.com/dann11._mt" target="_blank" rel="noopener" class="team-card">
+          <div class="team-ava" style="background:linear-gradient(135deg,var(--blue),var(--purple))">D</div>
+          <div>
+            <div class="team-name">Dany</div>
+            <div class="team-role">Desarrollador</div>
+            <div class="team-ig">@dann11._mt</div>
+          </div>
+        </a>
+        <a href="https://www.instagram.com/shee_ztp" target="_blank" rel="noopener" class="team-card">
+          <div class="team-ava" style="background:linear-gradient(135deg,var(--purple),var(--pink))">S</div>
+          <div>
+            <div class="team-name">Shee</div>
+            <div class="team-role">Tester</div>
+            <div class="team-ig">@shee_ztp</div>
+          </div>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav>
+  <span class="nav-brand">DAZU</span>
+  <ul class="nav-links">
+    <li><a href="#funciones">Funciones</a></li>
+    <li><a href="#como">Cómo funciona</a></li>
+    <li><a href="#descargar">Descargar</a></li>
+  </ul>
+  <button class="nav-about-btn" onclick="openAbout()">Acerca de</button>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div>
+    <div class="hero-badge"><span class="badge-dot"></span>App disponible · Android</div>
+    <h1 class="hero-title">
+      <span class="t1">DAZU</span>
+      <span class="t2">Mensajería sin internet</span>
+    </h1>
+    <p class="hero-sub">Chatea, llama y comparte archivos aunque no tengas señal. DAZU crea su propia red usando ESP32 — funciona en zonas remotas, eventos y emergencias.</p>
+    <div class="hero-beta">⚠️ App en fase de pruebas beta — puede presentar errores. Tu feedback es bienvenido.</div>
+
+    <div class="dl-wrap" id="descargar">
+      <div class="dl-rings">
+        <div class="dl-ring"></div>
+        <div class="dl-ring"></div>
+        <div class="dl-ring"></div>
+      </div>
+      <a href="https://github.com/laptopenvyhp-lgtm/DAZU/releases/download/v1.0/DAZU.V1.0.apk"
+         class="dl-btn" id="dlBtn" onclick="handleDownload(event)">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14l-4-4 1.41-1.41L11 13.17V8h2v5.17l2.59-2.58L17 12l-6 6z"/></svg>
+        <div>
+          Descargar DAZU
+          <span class="dl-btn-sub">Gratis · APK · Android 6.0+</span>
+        </div>
+      </a>
+    </div>
+
+
+
+    <div class="install-steps">
+      <div class="step"><div class="step-num">1</div>Descarga el APK</div>
+      <div class="step"><div class="step-num">2</div>Permite fuentes desconocidas</div>
+      <div class="step"><div class="step-num">3</div>Instala y abre DAZU</div>
+    </div>
+  </div>
+</section>
+
+<!-- MARQUEE -->
+<div class="marquee-wrap">
+  <div class="marquee-track">
+    <span class="marquee-item"><span>◆</span>DAZU Messenger</span>
+    <span class="marquee-item"><span>◆</span>Sin internet, sin límites</span>
+    <span class="marquee-item"><span>◆</span>Red Mesh ESP32</span>
+    <span class="marquee-item"><span>◆</span>Mensajes · Llamadas · Fotos</span>
+    <span class="marquee-item"><span>◆</span>ESP-NOW Protocol</span>
+    <span class="marquee-item"><span>◆</span>Flutter + Node.js</span>
+    <span class="marquee-item"><span>◆</span>Comunicación descentralizada</span>
+    <span class="marquee-item"><span>◆</span>Funciona en zonas remotas</span>
+    <span class="marquee-item"><span>◆</span>Beta v1.0</span>
+    <span class="marquee-item"><span>◆</span>DAZU Messenger</span>
+    <span class="marquee-item"><span>◆</span>Sin internet, sin límites</span>
+    <span class="marquee-item"><span>◆</span>Red Mesh ESP32</span>
+    <span class="marquee-item"><span>◆</span>Mensajes · Llamadas · Fotos</span>
+    <span class="marquee-item"><span>◆</span>ESP-NOW Protocol</span>
+    <span class="marquee-item"><span>◆</span>Flutter + Node.js</span>
+    <span class="marquee-item"><span>◆</span>Comunicación descentralizada</span>
+    <span class="marquee-item"><span>◆</span>Funciona en zonas remotas</span>
+    <span class="marquee-item"><span>◆</span>Beta v1.0</span>
+  </div>
+</div>
+
+<!-- FUNCIONES -->
+<section class="section" id="funciones">
+  <div class="section-inner">
+    <p class="section-tag reveal">// funciones</p>
+    <h2 class="section-title reveal">Todo lo que necesitas,<br>sin depender de nadie</h2>
+    <p class="section-desc reveal">Mensajería completa que funciona en tu red local o a través de internet cuando está disponible.</p>
+    <div class="feat-grid">
+      <div class="feat-card reveal"><span class="feat-icon">💬</span><h3>Mensajes de texto y voz</h3><p>Chatea en tiempo real. Graba audios con un toque. Historial completo en tu teléfono.</p></div>
+      <div class="feat-card reveal"><span class="feat-icon">📷</span><h3>Fotos y archivos</h3><p>Comparte imágenes directo por la red mesh. Sin subirlas a ningún servidor externo.</p></div>
+      <div class="feat-card reveal"><span class="feat-icon">📞</span><h3>Llamadas</h3><p>Llamadas de voz entre usuarios de la red. Historial completo con llamadas perdidas.</p></div>
+      <div class="feat-card reveal"><span class="feat-icon">🔔</span><h3>Notificaciones</h3><p>Alertas de mensajes y llamadas aunque la app esté en segundo plano.</p></div>
+      <div class="feat-card reveal"><span class="feat-icon">🎨</span><h3>Personalización</h3><p>Temas oscuro/claro, colores de burbujas, fondos y reacciones personalizadas.</p></div>
+      <div class="feat-card reveal"><span class="feat-icon">🛠️</span><h3>Herramientas</h3><p>Calculadora científica, traductor, diccionario y Wikipedia integrados.</p></div>
+    </div>
+  </div>
+</section>
+
+
+
+<!-- ESP32 MODEM INFO -->
+<section class="section" id="esp32" style="padding-top:0;">
+  <div class="section-inner">
+    <div class="esp-notice reveal" style="
+      background:rgba(168,85,247,0.06);
+      border:1px solid rgba(168,85,247,0.25);
+      border-radius:16px;padding:36px;
+      display:grid;grid-template-columns:auto 1fr;gap:24px;align-items:start;">
+      <div style="font-size:48px;margin-top:4px;">📡</div>
+      <div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--purple);margin-bottom:10px;">Modo offline</div>
+        <h3 style="font-size:20px;font-weight:700;margin-bottom:10px;letter-spacing:-0.5px;">Requiere módem ESP32 para funcionar sin internet</h3>
+        <p style="font-size:14px;color:var(--muted);line-height:1.8;margin-bottom:16px;">
+          Para usar DAZU sin conexión a internet necesitas un <strong style="color:var(--text)">nodo ESP32</strong> —
+          un pequeño dispositivo electrónico que actúa como punto de acceso WiFi local y enruta los mensajes entre teléfonos.
+          Sin él, la app funciona solo con internet (modo servidor).
+        </p>
+        <div style="
+          display:inline-flex;align-items:center;gap:8px;
+          background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);
+          border-radius:8px;padding:10px 16px;font-size:12px;color:#fbbf24;">
+          🔧 &nbsp;El módem ESP32 está actualmente en desarrollo. Próximamente disponible.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CÓMO FUNCIONA -->
+<section class="how" id="como">
+  <div class="how-inner">
+    <p class="section-tag reveal">// cómo funciona</p>
+    <h2 class="section-title reveal">Tu mensaje siempre<br>encuentra el camino</h2>
+    <div class="steps-grid">
+      <div class="step-card reveal">
+        <div class="step-n">01</div>
+        <div class="step-icon">📱</div>
+        <h3>Conecta tu teléfono</h3>
+        <p>Abre DAZU y conéctate al WiFi del nodo ESP32 más cercano. La app lo detecta automáticamente.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-n">02</div>
+        <div class="step-icon">📡</div>
+        <h3>La red mesh enruta</h3>
+        <p>Los nodos ESP32 se comunican usando ESP-NOW. El mensaje salta de nodo en nodo hasta el destino.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-n">03</div>
+        <div class="step-icon">✅</div>
+        <h3>Entregado</h3>
+        <p>El receptor recibe con confirmación de entrega y lectura. Sin internet, sin nubes externas.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-top">
+      <div class="footer-brand-col">
+        <span class="footer-brand">DAZU</span>
+        <p class="footer-tagline">Mensajería mesh descentralizada.<br>Sin internet, sin límites.</p>
+      </div>
+      <div class="footer-creators">
+        <a href="https://www.instagram.com/dann11._mt" target="_blank" rel="noopener" class="footer-creator-link">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>
+          @dann11._mt — Desarrollador
+        </a>
+        <a href="https://www.instagram.com/shee_ztp" target="_blank" rel="noopener" class="footer-creator-link">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>
+          @shee_ztp — Tester
+        </a>
+      </div>
+    </div>
+    <div class="footer-divider"></div>
+    <div class="footer-bottom">
+      <p class="footer-copy">© 2025 DAZU · Todos los derechos reservados · Hecho con ❤️ en México</p>
+      <span class="footer-beta">⚠️ Beta — puede contener errores</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+// ── CUSTOM CURSOR ──────────────────────────────────────────────────────
+const cur = document.getElementById('cur');
+const curRing = document.getElementById('curRing');
+let mx=0,my=0,rx=0,ry=0;
+document.addEventListener('mousemove', e => { mx=e.clientX; my=e.clientY; cur.style.left=mx+'px'; cur.style.top=my+'px'; });
+function animRing() {
+  rx += (mx-rx)*0.12; ry += (my-ry)*0.12;
+  curRing.style.left=rx+'px'; curRing.style.top=ry+'px';
+  requestAnimationFrame(animRing);
+}
+animRing();
+// Hide cursor on mobile
+if ('ontouchstart' in window) { cur.style.display='none'; curRing.style.display='none'; document.body.style.cursor='auto'; }
+
+// ── CANVAS PARTICLES ──────────────────────────────────────────────────
+const canvas = document.getElementById('bgCanvas');
+const ctx = canvas.getContext('2d');
+let W, H, particles = [];
+
+function resize() { W=canvas.width=window.innerWidth; H=canvas.height=window.innerHeight; }
+resize(); window.addEventListener('resize', resize);
+
+function Particle() {
+  this.x = Math.random()*W; this.y = Math.random()*H;
+  this.vx = (Math.random()-0.5)*0.4; this.vy = (Math.random()-0.5)*0.4;
+  this.r = Math.random()*1.5+0.5;
+  this.a = Math.random();
+  this.color = Math.random() > 0.5 ? '0,210,255' : '168,85,247';
+}
+
+for (let i=0;i<120;i++) particles.push(new Particle());
+
+function drawParticles() {
+  ctx.clearRect(0,0,W,H);
+  // Draw connections
+  for (let i=0;i<particles.length;i++) {
+    for (let j=i+1;j<particles.length;j++) {
+      const dx=particles[i].x-particles[j].x, dy=particles[i].y-particles[j].y;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      if (dist<120) {
+        ctx.beginPath();
+        ctx.strokeStyle=`rgba(0,210,255,${(1-dist/120)*0.12})`;
+        ctx.lineWidth=0.5;
+        ctx.moveTo(particles[i].x,particles[i].y);
+        ctx.lineTo(particles[j].x,particles[j].y);
+        ctx.stroke();
+      }
+    }
+    // Draw particle
+    ctx.beginPath();
+    ctx.arc(particles[i].x,particles[i].y,particles[i].r,0,Math.PI*2);
+    ctx.fillStyle=`rgba(${particles[i].color},${particles[i].a*0.7})`;
+    ctx.fill();
+    // Move
+    particles[i].x+=particles[i].vx; particles[i].y+=particles[i].vy;
+    if (particles[i].x<0||particles[i].x>W) particles[i].vx*=-1;
+    if (particles[i].y<0||particles[i].y>H) particles[i].vy*=-1;
+  }
+  requestAnimationFrame(drawParticles);
+}
+drawParticles();
+
+// ── DOWNLOAD HANDLER ──────────────────────────────────────────────────
+function handleDownload(e, btnId) {
+  const btn = document.getElementById(btnId || 'dlBtn');
+  if (btn) {
+    // Ripple
+    const ripple = document.createElement('span');
+    ripple.classList.add('ripple');
+    const rect = btn.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height);
+    ripple.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX-rect.left-size/2}px;top:${e.clientY-rect.top-size/2}px`;
+    btn.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 700);
+
+    btn.classList.add('downloading');
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M5 12l5 5L20 7" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/></svg><div>Descargando...<span class="dl-btn-sub">Puede tardar unos segundos</span></div>`;
+
+    setTimeout(() => {
+      btn.classList.remove('downloading');
+      btn.classList.add('downloaded');
+      btn.innerHTML = `<span style="font-size:22px">🎉</span><div>¡Descargado!<span class="dl-btn-sub">Instala el APK en tu Android</span></div>`;
+      // Show thank you
+      setTimeout(() => {
+        document.getElementById('tyOverlay').classList.add('show');
+      }, 800);
+    }, 2500);
+  }
+}
+
+// ── MODAL ─────────────────────────────────────────────────────────────
+function openAbout()  { document.getElementById('aboutModal').classList.add('open'); document.body.style.overflow='hidden'; }
+function closeAbout() { document.getElementById('aboutModal').classList.remove('open'); document.body.style.overflow=''; }
+function handleOverlay(e) { if(e.target===document.getElementById('aboutModal')) closeAbout(); }
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeAbout(); });
+
+// ── MINI PILL on scroll ───────────────────────────────────────────────
+(function(){
+  const pill    = document.getElementById('dlMiniPill');
+  const hero    = document.getElementById('hero');
+  if (!pill || !hero) return;
+  const onScroll = () => {
+    const heroBottom = hero.getBoundingClientRect().bottom;
+    if (heroBottom < 0) {
+      pill.classList.add('show');
+    } else {
+      pill.classList.remove('show');
+    }
+  };
+  window.addEventListener('scroll', onScroll, {passive:true});
+})();
+
+// ── REVEAL ON SCROLL ──────────────────────────────────────────────────
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(e => { if(e.isIntersecting){ e.target.classList.add('visible'); obs.unobserve(e.target); }});
+}, {threshold:0.1});
+document.querySelectorAll('.reveal').forEach(r => obs.observe(r));
+
+// ── STICKY DOWNLOAD BUTTON ────────────────────────────────────────────
+// Show sticky when the original button scrolls out of view
+
+</script>
+<!-- MINI PILL (appears on scroll) -->
+<div class="dl-mini-pill" id="dlMiniPill">
+  <a href="https://github.com/laptopenvyhp-lgtm/DAZU/releases/download/v1.0/DAZU.V1.0.apk"
+     onclick="handleDownload(event)">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 16.5l-4-4 1.41-1.41L11 13.67V8h2v5.67l1.59-1.59L16 13.5l-4 4zm0-14C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg>
+    Descargar APK
+  </a>
+</div>
+
+</body>
+</html>
