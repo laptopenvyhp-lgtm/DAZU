@@ -1,5 +1,7 @@
 // DAZU Messenger Server v2.1
 const http   = require('http');
+const fs     = require('fs');
+const path_module = require('path');
 const crypto = require('crypto');
 const PORT   = process.env.PORT || 3000;
 const MAX_BODY = 12 * 1024 * 1024; // 12MB
@@ -158,6 +160,18 @@ const server = http.createServer(async (req, res) => {
       .filter(([_, v]) => Date.now() - v.lastSeen < 65000)
       .map(([uid, v]) => ({ userId: uid, lastSeen: v.lastSeen }));
     return json(res, 200, { online: list });
+  }
+
+  // GET / — serve website
+  if (req.method === 'GET' && (path === '/' || path === '/index.html')) {
+    const file = path_module.join(__dirname, 'index.html');
+    fs.readFile(file, (err, data) => {
+      if (err) { json(res, 404, { error: 'index.html not found' }); return; }
+      cors(res);
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(data);
+    });
+    return;
   }
 
   json(res, 404, { error: 'not found' });
